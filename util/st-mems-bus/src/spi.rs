@@ -1,5 +1,4 @@
-use embedded_hal::spi::{SpiDevice, Operation};
-use crate::BusOperation;
+use super::{SpiDevice, Operation, BusOperation, bisync};
 
 pub struct SpiBus<P> {
    pub spi: P
@@ -21,6 +20,7 @@ impl<P: SpiDevice> SpiBus<P> {
     }
 }
 
+#[bisync]
 impl<P: SpiDevice> BusOperation for SpiBus<P> {
     type Error = P::Error;
 
@@ -36,8 +36,8 @@ impl<P: SpiDevice> BusOperation for SpiBus<P> {
     ///     * `()`
     ///     * `Err`: Returns an error if the read operation fails.
     #[inline]
-    fn read_bytes(&mut self, rbuf: &mut [u8]) -> Result<(), Self::Error> {
-        self.spi.transaction(&mut [Operation::Read(rbuf)])?;
+    async fn read_bytes(&mut self, rbuf: &mut [u8]) -> Result<(), Self::Error> {
+        self.spi.transaction(&mut [Operation::Read(rbuf)]).await?;
 
         Ok(())
     }
@@ -54,8 +54,8 @@ impl<P: SpiDevice> BusOperation for SpiBus<P> {
     ///     * `()`
     ///     * `Err`: Returns an error if the write operation fails.
     #[inline]
-    fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
-        self.spi.transaction(&mut [Operation::Write(wbuf)])?;
+    async fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
+        self.spi.transaction(&mut [Operation::Write(wbuf)]).await?;
 
         Ok(())
     }
@@ -73,14 +73,14 @@ impl<P: SpiDevice> BusOperation for SpiBus<P> {
     ///      * `()`
     ///     * `Err`: Returns an error if the write-read operation fails.
     #[inline]
-    fn write_byte_read_bytes(
+    async fn write_byte_read_bytes(
         &mut self,
         wbuf: &[u8; 1],
         rbuf: &mut [u8],
     ) -> Result<(), Self::Error> {
         self.spi
-            .transaction(&mut [Operation::Write(&[wbuf[0] | 0x80]), Operation::Read(rbuf)])?;
+            .transaction(&mut [Operation::Write(&[wbuf[0] | 0x80]), Operation::Read(rbuf)]).await?;
 
         Ok(())
-    }   
+    }
 }

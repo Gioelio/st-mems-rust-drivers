@@ -1,5 +1,4 @@
-use embedded_hal::i2c::{I2c, SevenBitAddress};
-use crate::BusOperation;
+use super::{bisync, I2c, SevenBitAddress, BusOperation};
 
 pub struct I2cBus<T: I2c> {
     pub i2c: T,
@@ -23,6 +22,7 @@ impl<T: I2c> I2cBus<T> {
     }
 }
 
+#[bisync]
 impl<T: I2c> BusOperation for I2cBus<T> {
     type Error = T::Error;
 
@@ -38,8 +38,8 @@ impl<T: I2c> BusOperation for I2cBus<T> {
     ///     * `()`
     ///     * `Err`: Returns an error if the read operation fails.
     #[inline]
-    fn read_bytes(&mut self, rbuf: &mut [u8]) -> Result<(), Self::Error> {
-        self.i2c.read(self.address, rbuf)?;
+    async fn read_bytes(&mut self, rbuf: &mut [u8]) -> Result<(), Self::Error> {
+        self.i2c.read(self.address, rbuf).await?;
 
         Ok(())
     }
@@ -56,8 +56,8 @@ impl<T: I2c> BusOperation for I2cBus<T> {
     ///     * `()`
     ///     * `Err`: Returns an error if the write operation fails.
     #[inline]
-    fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
-        self.i2c.write(self.address, wbuf)?;
+    async fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
+        self.i2c.write(self.address, wbuf).await?;
 
         Ok(())
     }
@@ -75,12 +75,12 @@ impl<T: I2c> BusOperation for I2cBus<T> {
     ///     * `()`
     ///     * `Err`: Returns an error if the write-read operation fails.
     #[inline]
-    fn write_byte_read_bytes(
+    async fn write_byte_read_bytes(
         &mut self,
         wbuf: &[u8; 1],
         rbuf: &mut [u8],
     ) -> Result<(), Self::Error> {
-        self.i2c.write_read(self.address, wbuf, rbuf)?;
+        self.i2c.write_read(self.address, wbuf, rbuf).await?;
 
         Ok(())
     }
