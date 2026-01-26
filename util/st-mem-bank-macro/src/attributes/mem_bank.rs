@@ -3,7 +3,7 @@ use syn::{
 };
 
 use quote::quote;
-use crate::{generate_generics, Lifetime};
+use crate::generate_generics;
 
 pub(crate) struct MemBankArgs {
     device: Ident,
@@ -43,7 +43,7 @@ impl Parse for MemBankArgs {
 
 pub(crate) struct VariantAttr {
     pub(crate) struct_name: Ident,
-    pub(crate) fn_name: LitStr 
+    pub(crate) fn_name: LitStr
 }
 
 impl Parse for VariantAttr {
@@ -57,7 +57,7 @@ impl Parse for VariantAttr {
 
             let key: Ident = input.parse()?;
             if key != "fn_name" {
-                return Err(syn::Error::new(key.span(), "Expected `fn_name`")); 
+                return Err(syn::Error::new(key.span(), "Expected `fn_name`"));
             }
             let _eq: Token![=] = input.parse()?;
             let fn_name_lit: LitStr = input.parse()?;
@@ -129,11 +129,18 @@ impl MemBank {
 
         let input = &self.enum_raw;
 
-        quote! {
+        let res = quote! {
             #input
 
+            pub struct MainBank;
+
+            pub trait BankState {}
+            impl BankState for MainBank {}
+
             #(#result)*
-        }
+        };
+
+        res
     }
 
     fn extract_state(attr: &Attribute) -> Option<VariantAttr> {
@@ -150,51 +157,80 @@ impl MemBank {
         let fn_name = &variant.fn_name;
         let main_variant = &self.main_variant.ident;
 
-        let (long_generics_a, _short_generics_a) = generate_generics(Lifetime::A, generics_num);
-        let (_long_generics_anonym, short_generics_anonym) = generate_generics(Lifetime::Anonym, generics_num);
-        let (long_generics, short_generics) = generate_generics(Lifetime::None, generics_num);
+        let generics = generate_generics(generics_num.into());
+        let long_timer = generics.timer_long;
+        let short_timer = generics.timer_short;
 
-        let (generics_for_operate, where_clause) = if generics_num == 2 {
-            (quote! { <B, T, F, R> }, quote! { where B: BusOperation, T: DelayNs, F: FnOnce(&mut #name #short_generics) -> Result<R, Error<B::Error>> } )
-        } else {
-            (quote! { <B, F, R> }, quote! { where B: BusOperation, F: FnOnce(&mut #name #short_generics) -> Result<R, Error<B::Error>> } )
-        };
 
         let fn_name = Ident::new(&fn_name.value(), fn_name.span());
         let enum_name = &self.enum_name;
 
         quote!(
+            pub struct #name;
 
-            pub struct #name #long_generics_a {
-                sensor: &'a mut #sensor_name #short_generics
-            }
+            impl BankState for #name {}
 
-            impl #long_generics #name #short_generics_anonym {
-                pub fn write_to_register(&mut self, reg: u8, buf: &[u8]) -> Result<(), Error<B::Error>> {
-                    self.sensor.write_to_register(reg, buf)
-                }
+            #[only_async]
+            impl<B #short_timer, S> #sensor_name<B #short_timer, S>
+            where
+                B: BusOperation
+                #long_timer,
+                S: BankState
+            {
+                pub async fn #fn_name<'a, F, R>(&'a mut self, f: F) -> Result<R, Error<B::Error>>
+                where
+                    F: AsyncFnOnce(&'a mut #sensor_name<B #short_timer, #name>) -> Result<R, Error<B::Error>>
+                {
+                    // Switch membank
+                    self.mem_bank_set(#enum_name :: #variant_name).await?;
 
+                    // Transmute the state
+                    // SAFETY: It's safe as long as invoked over ZST (zero sized type)
+                    let extended_driver = unsafe {
+                        &mut *(self as *mut Self as *mut #sensor_name<B #short_timer, #name>)
+                    };
 
-                pub fn read_from_register(&mut self, reg: u8, buf: &mut [u8]) -> Result<(), Error<B::Error>> {
-                    self.sensor.read_from_register(reg, buf)
-                }
-            }
+                    // Execute operations
+                    let result = f(extended_driver).await;
 
-            impl #enum_name {
+                    // Switch back to main bank
+                    self.mem_bank_set(#enum_name :: #main_variant).await?;
 
-                pub fn #fn_name #generics_for_operate (sensor: &mut #sensor_name #short_generics, f: F) -> Result<R, Error<B::Error>> #where_clause {
-
-                    sensor.mem_bank_set(Self::#variant_name)?;
-                    let mut state = #name { sensor };
-                    let result = f(&mut state);
-                    sensor.mem_bank_set(Self::#main_variant)?;
                     result
-
                 }
-
             }
-        )
 
+            #[only_sync]
+            impl<B #short_timer, S> #sensor_name<B, T, S>
+            where
+                B: BusOperation
+                #long_timer,
+                S: BankState
+            {
+                pub fn #fn_name<F, R>(& mut self, f: F) -> Result<R, Error<B::Error>>
+                where
+                    F: FnOnce(& mut #sensor_name<B #short_timer, #name>) -> Result<R, Error<B::Error>>,
+                {
+                    // Switch to #variant_name
+                    self.mem_bank_set(#enum_name :: #variant_name)?;
+
+                    // Transmute the state
+                    // SAFETY: It's safe as long as invoked over ZST (zero sized type)
+                    let extended_driver = unsafe {
+                        &mut *(self as *mut Self as *mut #sensor_name<B #short_timer, #name>)
+                    };
+
+                    // Execute operations
+                    let result = f(extended_driver);
+
+                    // Switch back to main bank
+                    self.mem_bank_set(#enum_name :: #main_variant)?;
+
+                    result
+                }
+            }
+
+        )
     }
 
     fn filter_name_attrs(attrs: &[Attribute]) -> Vec<Attribute> {

@@ -7,15 +7,15 @@ use syn::{
 use quote::quote;
 use crate::generator::QuoteOutput;
 
-use super::Order;
+use super::{count_generics, Order};
 
 pub(crate) struct AdvRegisterAttr {
     pub base_address: Path,
     pub address: Path,
-    pub access_type: Path,
+    pub access_type: syn::Type,
     pub init_fn: Option<Path>,
     pub override_type: Option<Type>,
-    pub generics_num: u8,
+    pub generics_num: usize,
     pub order: Order
 }
 
@@ -27,7 +27,6 @@ impl Parse for AdvRegisterAttr {
         let mut init_fn = None;
         let mut override_type = None;
         let mut order = Order::Forward;
-        let mut generics_num = None;
 
         // Parse comma-separated key-value pairs
         let pairs = Punctuated::<syn::MetaNameValue, Token![,]>::parse_terminated(input)?;
@@ -45,16 +44,11 @@ impl Parse for AdvRegisterAttr {
                         address = Some(path.path.clone());
                     }
                 },
-                "generics" => {
-                    if let Expr::Lit(expr_lit) = &pair.value {
-                        if let Lit::Int(lit_int) = &expr_lit.lit {
-                             generics_num = lit_int.base10_parse::<u8>().ok();
-                        }
-                    }
-                },
                 "access_type" => {
-                    if let Expr::Path(path) = &pair.value {
-                        access_type = Some(path.path.clone());
+                    if let Expr::Lit(path) = &pair.value {
+                        if let Lit::Str(lit_str) = &path.lit {
+                            access_type = Some(syn::parse_str(&lit_str.value())?);
+                        }
                     }
                 },
                 "init_fn" => {
@@ -83,7 +77,7 @@ impl Parse for AdvRegisterAttr {
         let access_type = access_type.ok_or_else(|| input.error("missing 'state' argument"))?;
         let address = address.ok_or_else(|| input.error("missing 'address' argument"))?;
         let base_address = base_address.ok_or_else(|| input.error("missing 'base_address' argument"))?;
-        let generics_num = generics_num.ok_or_else(|| input.error("missing 'generic' argument"))?;
+        let generics_num = count_generics(&access_type) - 1;
 
         Ok(AdvRegisterAttr {
             base_address,
@@ -109,34 +103,34 @@ impl QuoteOutput for AdvRegisterAttr {
     fn quote_read(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
         let base_address = &self.base_address;
-        quote! { sensor.ln_pg_read(#base_address as u16 + #address as u16, buff, buff.len() as u8) }
+        quote! { sensor.ln_pg_read(#base_address as u16 + #address as u16, buff, buff.len() as u8).await }
     }
-    
+
     fn quote_write_single(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
         let base_address = &self.base_address;
-        quote! { sensor.ln_pg_write(#base_address as u16 + #address as u16, &[self.0], 1) }
+        quote! { sensor.ln_pg_write(#base_address as u16 + #address as u16, &[self.0], 1).await }
     }
-    
+
     fn quote_write_multi(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
         let base_address = &self.base_address;
 
         let to_fn = self.order.to_x_bytes_word();
 
-        quote! { 
+        quote! {
             let output = self.0.#to_fn();
-            sensor.ln_pg_write(#base_address as u16 + #address as u16, &output, output.len() as u8)
+            sensor.ln_pg_write(#base_address as u16 + #address as u16, &output, output.len() as u8).await
         }
     }
 
     fn quote_write_to_buff(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
         let base_address = &self.base_address;
-        quote! { sensor.ln_pg_write(#base_address as u16 + #address as u16, &buff, buff.len() as u8) }
+        quote! { sensor.ln_pg_write(#base_address as u16 + #address as u16, &buff, buff.len() as u8).await }
     }
 
-    fn get_access_type(&self) -> &Path {
+    fn get_access_type(&self) -> &syn::Type {
         &self.access_type
     }
 
@@ -156,8 +150,12 @@ impl QuoteOutput for AdvRegisterAttr {
         self.order
     }
 
-    fn get_generics_num(&self) -> u8 {
+    fn get_generics_num(&self) -> usize {
         self.generics_num
+    }
+
+    fn get_multi_state(&self) -> bool {
+        false
     }
 
 }

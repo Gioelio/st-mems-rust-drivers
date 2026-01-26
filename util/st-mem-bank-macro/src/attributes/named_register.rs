@@ -11,12 +11,14 @@ use quote::quote;
 use crate::attributes::Order;
 use crate::generator::QuoteOutput;
 
+use super::count_generics;
+
 pub(crate) struct NamedRegisterAttr {
     pub address: Path,
-    pub access_type: Path,
+    pub access_type: syn::Type,
     pub init_fn: Option<Path>,
     pub override_type: Option<Type>,
-    pub generics_num: u8,
+    pub generics_num: usize,
     pub order: Order
 }
 
@@ -27,7 +29,6 @@ impl Parse for NamedRegisterAttr {
         let mut init_fn = None;
         let mut override_type = None;
         let mut order = Order::Forward;
-        let mut generics_num = None;
 
         // Parse comma-separated key-value pairs
         let pairs = Punctuated::<syn::MetaNameValue, Token![,]>::parse_terminated(input)?;
@@ -41,14 +42,9 @@ impl Parse for NamedRegisterAttr {
                     }
                 }
                 "access_type" => {
-                    if let Expr::Path(path) = &pair.value {
-                        access_type = Some(path.path.clone());
-                    }
-                },
-                "generics" => {
-                    if let Expr::Lit(expr_lit) = &pair.value {
-                        if let Lit::Int(lit_int) = &expr_lit.lit {
-                             generics_num = lit_int.base10_parse::<u8>().ok();
+                    if let Expr::Lit(path) = &pair.value {
+                        if let Lit::Str(lit_str) = &path.lit {
+                            access_type = Some(syn::parse_str(&lit_str.value())?);
                         }
                     }
                 },
@@ -77,7 +73,7 @@ impl Parse for NamedRegisterAttr {
 
         let access_type = access_type.ok_or_else(|| input.error("missing 'state' argument"))?;
         let address = address.ok_or_else(|| input.error("missing 'address' argument"))?;
-        let generics_num = generics_num.ok_or_else(|| input.error("missing 'generic' argument"))?;
+        let generics_num = count_generics(&access_type) - 1;
 
         Ok(NamedRegisterAttr {
             access_type,
@@ -101,27 +97,27 @@ fn expr_path_to_type(expr: &ExprPath) -> Type {
 impl QuoteOutput for NamedRegisterAttr {
     fn quote_read(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
-        quote! { sensor.read_from_register(#address as u8, buff) }
+        quote! { sensor.read_from_register(#address as u8, buff).await }
     }
-    
+
     fn quote_write_single(&self) -> proc_macro2::TokenStream {
         //let address = &self.address;
         //quote! { sensor.write_to_register(#address as u8, &[self]) }
         panic!("not required");
     }
-    
+
     fn quote_write_multi(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
         let to_fn = self.order.to_x_bytes_word();
-        quote! { sensor.write_to_register(#address as u8, &self.#to_fn()) }
+        quote! { sensor.write_to_register(#address as u8, &self.#to_fn()).await }
     }
 
     fn quote_write_to_buff(&self) -> proc_macro2::TokenStream {
         let address = &self.address;
-        quote! { sensor.write_to_register(#address as u8, &buff) }
+        quote! { sensor.write_to_register(#address as u8, &buff).await }
     }
 
-    fn get_access_type(&self) -> &Path {
+    fn get_access_type(&self) -> &syn::Type {
         &self.access_type
     }
 
@@ -141,8 +137,12 @@ impl QuoteOutput for NamedRegisterAttr {
         self.order
     }
 
-    fn get_generics_num(&self) -> u8 {
+    fn get_generics_num(&self) -> usize {
         self.generics_num
+    }
+
+    fn get_multi_state(&self) -> bool {
+        false
     }
 }
 

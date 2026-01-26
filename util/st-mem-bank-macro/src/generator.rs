@@ -1,27 +1,28 @@
 use syn::{
-    Path, Type, ItemStruct, PathSegment, TypePath
+    Type, ItemStruct, PathSegment, TypePath
 };
 
 use quote::quote;
 
-use crate::{attributes::Order, StructRegisterAttr};
+use crate::{attributes::Order, Generics, StructRegisterAttr};
 
 pub(crate) trait QuoteOutput {
     fn quote_write_single(&self) -> proc_macro2::TokenStream;
     fn quote_write_multi(&self) -> proc_macro2::TokenStream;
     fn quote_write_to_buff(&self) -> proc_macro2::TokenStream;
-    fn get_access_type(&self) -> &Path;
+    fn get_access_type(&self) -> &Type;
     fn quote_read(&self) -> proc_macro2::TokenStream;
     fn get_init(&self) -> proc_macro2::TokenStream;
     fn get_override_type(&self) -> Option<Type>;
     fn get_order(&self) -> Order;
-    fn get_generics_num(&self) -> u8;
+    fn get_generics_num(&self) -> usize;
+    fn get_multi_state(&self) -> bool;
 }
 
 pub(crate) struct Quote<'a, T> where T: QuoteOutput {
     input: &'a ItemStruct,
-    args: T, 
-    generics: &'a (proc_macro2::TokenStream, proc_macro2::TokenStream),
+    args: T,
+    generics: &'a Generics,
     data_type: Type,
     pub(crate) buffer_size: proc_macro2::TokenStream,
     n_array: usize,
@@ -33,7 +34,7 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
     pub fn new(
         input: &'a ItemStruct,
         args: T,
-        generics: &'a (proc_macro2::TokenStream, proc_macro2::TokenStream),
+        generics: &'a Generics,
         data_type: &'a Type,
         n_array: usize,
         use_new: bool,
@@ -86,7 +87,7 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
     }
 
     fn quote_for_u8(&self) -> proc_macro2::TokenStream {
-        let (long_generics, short_generics) = self.generics;
+        let timer_long = self.generics.timer_long.clone();
         let struct_name = &self.input.ident;
 
         let Quote {
@@ -98,6 +99,13 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         let write = self.args.quote_write_single();
         let access_type = self.args.get_access_type();
         let init = self.args.get_init();
+        let multi = self.args.get_multi_state();
+
+        let multi = if multi {
+            quote! { , S: BankState }
+        } else {
+            quote! { }
+        };
 
         let create_from_buff = if self.use_new {
             quote! { Self::new(buff[0]) }
@@ -108,19 +116,20 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         quote! {
             #input
 
-            impl #struct_name {
-                pub fn read #long_generics (sensor: &mut #access_type #short_generics) -> Result<Self, Error<B::Error>> {
+            #[bisync]
+            impl<B: BusOperation #timer_long #multi> RegisterOperation<#access_type , Error<B::Error>> for #struct_name {
+                async fn read (sensor: &mut #access_type) -> Result<Self, Error<B::Error>> {
                     let mut buff = [#init; 1];
-                    Self::read_more(sensor, &mut buff)?;
+                    Self::read_more(sensor, &mut buff).await?;
                     Ok(#create_from_buff)
                 }
 
-                pub fn write #long_generics (&self, sensor: &mut #access_type #short_generics) -> Result<(), Error<B::Error>> {
+                async fn write (&self, sensor: &mut #access_type) -> Result<(), Error<B::Error>> {
                     #write
                 }
-                
+
                 #[inline]
-                pub fn read_more #long_generics (sensor: &mut #access_type #short_generics, buff: &mut [u8]) -> Result<(), Error<B::Error>> {
+                async fn read_more (sensor: &mut #access_type, buff: &mut [u8]) -> Result<(), Error<B::Error>> {
                     #read
                 }
             }
@@ -128,7 +137,7 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
     }
 
     fn quote_for_multibyte(&self) -> proc_macro2::TokenStream {
-        let (long_generics, short_generics) = self.generics;
+        let timer_long = self.generics.timer_long.clone();
         let struct_name = &self.input.ident;
 
         let Quote {
@@ -142,6 +151,13 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         let write = self.args.quote_write_multi();
         let access_type = self.args.get_access_type();
         let init = self.args.get_init();
+        let multi = self.args.get_multi_state();
+
+        let multi = if multi {
+            quote! { , S }
+        } else {
+            quote! { }
+        };
 
         let create_from_val = if self.use_new {
             quote! { val }
@@ -152,31 +168,32 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         let from_fn = self.args.get_order().from_x_bytes_word();
 
         let read_more = if self.offset.0 + self.offset.1 == 0 {
-            quote! { Self::read_more(sensor, &mut buff)?; }
+            quote! { Self::read_more(sensor, &mut buff).await?; }
         } else {
             let size = StructRegisterAttr::size_of_type(&self.data_type).expect("Cannot use offset with other than primitive types");
             let offset_before = self.offset.0 as usize;
             let end = size - (self.offset.1 as usize);
-            quote! { Self::read_more(sensor, &mut buff[#offset_before..#end])?; }
+            quote! { Self::read_more(sensor, &mut buff[#offset_before..#end]).await?; }
         };
 
         quote! {
             #input
 
-            impl #struct_name {
-                pub fn read #long_generics (sensor: &mut #access_type #short_generics) -> Result<Self, Error<B::Error>> {
+            #[bisync]
+            impl<B: BusOperation #timer_long #multi> RegisterOperation<#access_type , Error<B::Error>> for #struct_name {
+                async fn read (sensor: &mut #access_type ) -> Result<Self, Error<B::Error>> {
                     let mut buff = [#init; #buffer_size];
                     #read_more
                     let val = <#data_type>::#from_fn(buff);
                     Ok(#create_from_val)
                 }
 
-                pub fn write #long_generics (&self, sensor: &mut #access_type #short_generics) -> Result<(), Error<B::Error>> {
+                async fn write (&self, sensor: &mut #access_type ) -> Result<(), Error<B::Error>> {
                     #write
                 }
-                
+
                 #[inline]
-                pub fn read_more #long_generics (sensor: &mut #access_type #short_generics, buff: &mut [u8]) -> Result<(), Error<B::Error>> {
+                async fn read_more (sensor: &mut #access_type , buff: &mut [u8]) -> Result<(), Error<B::Error>> {
                     #read
                 }
             }
@@ -184,7 +201,7 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
     }
 
     fn quote_for_array(&self) -> proc_macro2::TokenStream {
-        let (long_generics, short_generics) = self.generics;
+        let timer_long = self.generics.timer_long.clone();
         let struct_name = &self.input.ident;
 
         let Quote {
@@ -201,19 +218,24 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         let write = self.args.quote_write_to_buff();
         let access_type = self.args.get_access_type();
         let init = self.args.get_init();
+        let multi = self.args.get_multi_state();
+
+        let multi = if multi {
+            quote! { , S }
+        } else {
+            quote! { }
+        };
 
         // a named register cannot use this function
-        
         let from_fn = self.args.get_order().from_x_bytes_word();
         let to_fn = self.args.get_order().to_x_bytes_word();
 
         let type_size = StructRegisterAttr::size_of_type(&self.data_type);
 
-    
         let type_assignment = if let Some(bytes) = type_size {
             let assignments = (0..*n_array).map(|i| {
                 let bytes_str = (0..bytes).map(|j| {
-                    let idx = i * bytes + j;    
+                    let idx = i * bytes + j;
                     quote! { buff[#idx] }
                 });
 
@@ -239,21 +261,21 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
         quote! {
             #input
 
-            impl #struct_name {
-                pub fn read #long_generics (sensor: &mut #access_type #short_generics) -> Result<Self, Error<B::Error>> {
+            #[bisync]
+            impl<B: BusOperation #timer_long #multi> RegisterOperation<#access_type , Error<B::Error>> for #struct_name {
+                async fn read (sensor: &mut #access_type ) -> Result<Self, Error<B::Error>> {
                     let mut buff = [0; #buffer_size_str];
-                    Self::read_more(sensor, &mut buff)?;
+                    Self::read_more(sensor, &mut buff).await?;
 
                     // Process the buffer into the struct
                     let mut val: [#data_type; #n_array] = [#init; #n_array];
 
                     #type_assignment
-                    
 
                     Ok(Self(val))
                 }
 
-                pub fn write #long_generics (&self, sensor: &mut #access_type #short_generics) -> Result<(), Error<B::Error>> {
+                async fn write (&self, sensor: &mut #access_type ) -> Result<(), Error<B::Error>> {
                     let mut buff = [0; #buffer_size_str];
                     for i in 0..#n_array {
                         buff[i * #num_bytes..(i + 1) * #num_bytes].copy_from_slice(&self.0[i].#to_fn());
@@ -263,10 +285,9 @@ impl<'a, T> Quote<'a, T> where T: QuoteOutput {
                 }
 
                 #[inline]
-                pub fn read_more #long_generics (sensor: &mut #access_type #short_generics, buff: &mut [u8]) -> Result<(), Error<B::Error>> {
+                async fn read_more (sensor: &mut #access_type , buff: &mut [u8]) -> Result<(), Error<B::Error>> {
                     #read
                 }
-
             }
         }
     }

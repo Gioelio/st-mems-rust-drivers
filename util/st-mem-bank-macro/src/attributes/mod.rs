@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream;
+use syn::{ Type, PathArguments };
 
 pub mod register;
 pub mod adv_register;
@@ -31,4 +32,16 @@ impl Order {
             quote! {to_be_bytes}
         }
     }
+}
+
+fn count_generics(ty: &Type) -> usize {
+    if let Type::Path(type_path) = ty {
+        // Get the last segment (e.g., "Lsm6dsv16x")
+        if let Some(last_segment) = type_path.path.segments.last() {
+            if let PathArguments::AngleBracketed(ref generics) = last_segment.arguments {
+                return generics.args.len();
+            }
+        }
+    }
+    0
 }

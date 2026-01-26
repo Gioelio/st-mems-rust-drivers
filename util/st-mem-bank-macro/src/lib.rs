@@ -73,9 +73,9 @@ pub fn adv_register(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let args = parse_macro_input!(attr as AdvRegisterAttr);
 
-    let (data_type, n_array, offset_before, offset_after) = get_type_and_array_size(&mut input); 
+    let (data_type, n_array, offset_before, offset_after) = get_type_and_array_size(&mut input);
 
-    let generics = generate_generics(Lifetime::None, args.get_generics_num());
+    let generics = generate_generics(args.get_generics_num());
 
     let mut quote = Quote::new(
         &input,
@@ -98,8 +98,8 @@ pub fn register(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
     let args = parse_macro_input!(attr as RegisterAttr);
 
-    let (data_type, n_array, offset_before, offset_after) = get_type_and_array_size(&mut input); 
-    let generics = generate_generics(Lifetime::None, args.get_generics_num());
+    let (data_type, n_array, offset_before, offset_after) = get_type_and_array_size(&mut input);
+    let generics = generate_generics(args.get_generics_num());
 
     let mut quote = Quote::new(
         &input,
@@ -124,7 +124,7 @@ pub fn named_register(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as NamedRegisterAttr);
 
     let mut bytes: usize = 0;
-    let to_from_le_bytes: proc_macro2::TokenStream = NamedRegisterAttr::create_to_from_le_bytes(item, &mut bytes).into(); 
+    let to_from_le_bytes: proc_macro2::TokenStream = NamedRegisterAttr::create_to_from_le_bytes(item, &mut bytes).into();
 
 
     let struct_ident: &Ident = &input.ident;
@@ -137,7 +137,7 @@ pub fn named_register(attr: TokenStream, item: TokenStream) -> TokenStream {
     let data_type = Type::Path(type_path);
 
 
-    let generics = generate_generics(Lifetime::None, args.get_generics_num());
+    let generics = generate_generics(args.get_generics_num());
     let mut quote = Quote::new(
         &input,
         args,
@@ -164,5 +164,8 @@ pub fn mem_bank(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as MemBank);
     let sensor = parse_macro_input!(attr as MemBankArgs);
 
-    TokenStream::from(input.create_output(&sensor)) 
+
+    let a = input.create_output(&sensor);
+
+    TokenStream::from(a)
 }

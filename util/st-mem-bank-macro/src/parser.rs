@@ -109,30 +109,19 @@ pub fn get_type_and_array_size(item: &mut ItemStruct) -> (Type, usize, u8, u8) {
     }
 }
 
-pub(crate) enum Lifetime {
-    A,
-    Anonym,
-    None
+pub(crate) struct Generics {
+    pub timer_short: proc_macro2::TokenStream,
+    pub timer_long: proc_macro2::TokenStream
 }
 
-
 /// It creates the generics part based on the input
-pub fn generate_generics(lifetime: Lifetime, generics_num: u8) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
-
-    let generics_str = match lifetime {
-        Lifetime::A => quote! { <'a, },
-        Lifetime::Anonym => quote! { <'_, },
-        Lifetime::None => quote! { < },
-    };
+pub fn generate_generics(generics_num: usize) -> Generics {
 
     let (timer_short, timer_long) = if generics_num == 2 {
-        (quote! { T }, quote! { T: DelayNs })
+        (quote! { , T }, quote! { , T: DelayNs })
     } else {
         (quote! {}, quote! {})
     };
 
-    let gen_short = quote! {#generics_str B, #timer_short >};
-    let gen_long = quote! {#generics_str B: BusOperation, #timer_long >};
-
-    (gen_long, gen_short)
+    Generics { timer_short, timer_long }
 }
