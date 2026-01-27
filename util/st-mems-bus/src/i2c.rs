@@ -1,8 +1,8 @@
-use super::{bisync, I2c, SevenBitAddress, BusOperation};
+use super::{BusOperation, I2c, SevenBitAddress, bisync};
 
 pub struct I2cBus<T: I2c> {
     pub i2c: T,
-    pub address: SevenBitAddress
+    pub address: SevenBitAddress,
 }
 
 #[allow(dead_code)]
@@ -84,5 +84,4 @@ impl<T: I2c> BusOperation for I2cBus<T> {
 
         Ok(())
     }
-
 }

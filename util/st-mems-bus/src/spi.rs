@@ -1,7 +1,7 @@
-use super::{SpiDevice, Operation, BusOperation, bisync};
+use super::{BusOperation, Operation, SpiDevice, bisync};
 
 pub struct SpiBus<P> {
-   pub spi: P
+    pub spi: P,
 }
 
 #[allow(dead_code)]
@@ -79,7 +79,8 @@ impl<P: SpiDevice> BusOperation for SpiBus<P> {
         rbuf: &mut [u8],
     ) -> Result<(), Self::Error> {
         self.spi
-            .transaction(&mut [Operation::Write(&[wbuf[0] | 0x80]), Operation::Read(rbuf)]).await?;
+            .transaction(&mut [Operation::Write(&[wbuf[0] | 0x80]), Operation::Read(rbuf)])
+            .await?;
 
         Ok(())
     }
