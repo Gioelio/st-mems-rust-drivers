@@ -1,0 +1,31 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# Choose a default "cargo run" tool:
+runner = "probe-rs run --chip {{mcu}}"
+# runner = "gdb-multiarch -q -x openocd.gdb"
+# runner = "openocd -f interface/stlink-v2-1.cfg -f target/{{family}}x.cfg -c 'program target/{{target}}/debug/{{project-name}} verify reset exit'"
+
+rustflags = [
+  # Previously, the linker arguments --nmagic and --gc-sections were set here.
+  # They are now set by default by probe-rs-tools (>= 0.24) and cargo-embed (>= 0.21).
+  # You can uncomment the next line if you're using an older version.
+  # "-C", "link-arg=--nmagic", "-C", "link-arg=--gc-sections",
+
+  # This is needed if your flash or ram addresses are not aligned to 0x10000 in memory.x
+  # See https://github.com/rust-embedded/cortex-m-quickstart/pull/95
+  "-C", "link-arg=--nmagic",
+
+  # LLD (shipped with the Rust toolchain) has an issue with merging duplicate sections
+  # which sometimes causes problems with flip-link. This disables the optimization.
+  "-C", "link-arg=-znostart-stop-gc",
+]
+
+[build]
+# Avilable targets
+# target = "thumbv7em-none-eabihf"    # For Cortex-M4F and Cortex-M7F (with FPU)
+# target = "thumbv7em-none-eabi"     # For Cortex-M4 and Cortex-M7 (no FPU)
+# target = "thumbv7m-none-eabi"      # For Cortex-M3
+# target = "thumbv6m-none-eabi"      # For Cortex-M0 and Cortex-M0+
+target = "{{target}}"
+
+[env]
+DEFMT_LOG = "info"

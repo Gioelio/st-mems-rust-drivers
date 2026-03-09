@@ -1,0 +1,228 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "build",
+        "--target",
+        "{{target}}"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "cargo build (release)",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "build",
+        "--release",
+        "--target",
+        "{{target}}"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "cargo check",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "check",
+        "--target",
+        "{{target}}"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "cargo clippy",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "clippy",
+        "--target",
+        "{{target}}",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "cargo clean",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "clean"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo flash",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "flash",
+        "--chip",
+        "{{mcu}}",
+        "--target",
+        "{{target}}"
+      ],
+      "problemMatcher": [],
+      "dependsOn": "cargo build (release)"
+    },
+    {
+      "label": "cargo embed",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "embed",
+        "--target",
+        "{{target}}"
+      ],
+      "problemMatcher": [],
+      "dependsOn": "cargo build"
+    },
+    {
+      "label": "probe-rs run",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "run",
+        "--chip",
+        "{{mcu}}",
+        "--protocol",
+        "swd",
+        "target/{{target}}/debug/${workspaceFolderBasename}"
+      ],
+      "problemMatcher": [],
+      "dependsOn": "cargo build"
+    },
+    {
+      "label": "probe-rs run (release)",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "run",
+        "--chip",
+        "{{mcu}}",
+        "--protocol",
+        "swd",
+        "--release",
+        "target/{{target}}/release/${workspaceFolderBasename}"
+      ],
+      "problemMatcher": [],
+      "dependsOn": "cargo build (release)"
+    },
+    {
+      "label": "probe-rs attach",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "attach",
+        "--chip",
+        "{{mcu}}",
+        "--protocol",
+        "swd"
+      ],
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "probe-rs info",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "info"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "probe-rs list",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "list"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "probe-rs erase",
+      "type": "shell",
+      "command": "probe-rs",
+      "args": [
+        "erase",
+        "--chip",
+        "{{mcu}}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo size",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "size",
+        "--target",
+        "{{target}}",
+        "--release",
+        "--",
+        "-A"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo objdump",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "objdump",
+        "--target",
+        "{{target}}",
+        "--release",
+        "--",
+        "-d"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "openocd",
+      "type": "shell",
+      "command": "openocd",
+      "args": [
+        "-f",
+        "interface/stlink.cfg",
+        "-f",
+        "target/{{openocd_target}}.cfg"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "line": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Open On-Chip Debugger.*$",
+          "endsPattern": "^.*Listening on port.*$"
+        }
+      }
+    }
+  ]
+}

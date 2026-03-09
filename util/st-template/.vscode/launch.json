@@ -1,0 +1,143 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "probe-rs-debug",
+      "request": "launch",
+      "name": "Debug (probe-rs)",
+      "cwd": "${workspaceFolder}",
+      "chip": "{{mcu}}",
+      "flashingConfig": {
+        "flashingEnabled": true,
+        "resetAfterFlashing": true,
+        "haltAfterReset": true
+      },
+      "coreConfigs": [
+        {
+          "coreIndex": 0,
+          "programBinary": "${workspaceFolder}/target/{{target}}/debug/${workspaceFolderBasename}",
+          "svdFile": "${workspaceFolder}/.vscode/{{svd_name}}.svd",
+          "rttEnabled": true,
+          "rttChannelFormats": [
+            {
+              "channelNumber": 0,
+              "dataFormat": "Defmt",
+              "showTimestamps": true
+            }
+          ]
+        }
+      ],
+      "preLaunchTask": "cargo build"
+    },
+    {
+      "type": "probe-rs-debug",
+      "request": "launch",
+      "name": "Debug (probe-rs) Release",
+      "cwd": "${workspaceFolder}",
+      "chip": "{{mcu}}",
+      "flashingConfig": {
+        "flashingEnabled": true,
+        "resetAfterFlashing": true,
+        "haltAfterReset": true
+      },
+      "coreConfigs": [
+        {
+          "coreIndex": 0,
+          "programBinary": "${workspaceFolder}/target/{{target}}/release/${workspaceFolderBasename}",
+          "svdFile": "${workspaceFolder}/.vscode/{{svd_name}}.svd",
+          "rttEnabled": true,
+          "rttChannelFormats": [
+            {
+              "channelNumber": 0,
+              "dataFormat": "Defmt",
+              "showTimestamps": true
+            }
+          ]
+        }
+      ],
+      "preLaunchTask": "cargo build (release)"
+    },
+    {
+      "type": "probe-rs-debug",
+      "request": "attach",
+      "name": "Attach (probe-rs)",
+      "cwd": "${workspaceFolder}",
+      "chip": "{{mcu}}",
+      "coreConfigs": [
+        {
+          "coreIndex": 0,
+          "programBinary": "${workspaceFolder}/target/{{target}}/debug/${workspaceFolderBasename}",
+          "svdFile": "${workspaceFolder}/.vscode/{{svd_name}}.svd",
+          "rttEnabled": true,
+          "rttChannelFormats": [
+            {
+              "channelNumber": 0,
+              "dataFormat": "Defmt",
+              "showTimestamps": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug (OpenOCD)",
+      "servertype": "openocd",
+      "cwd": "${workspaceRoot}",
+      "executable": "${workspaceRoot}/target/{{target}}/debug/${workspaceFolderBasename}",
+      "device": "{{mcu}}",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/{{openocd_target}}.cfg"
+      ],
+      "svdFile": "${workspaceRoot}/.vscode/{{svd_name}}.svd",
+      "preLaunchTask": "cargo build",
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug (ST-Link)",
+      "servertype": "stlink",
+      "cwd": "${workspaceRoot}",
+      "executable": "${workspaceRoot}/target/{{target}}/debug/${workspaceFolderBasename}",
+      "device": "{{mcu}}",
+      "svdFile": "${workspaceRoot}/.vscode/{{svd_name}}.svd",
+      "preLaunchTask": "cargo build",
+      "runToEntryPoint": "main",
+      "v1": false,
+      "showDevDebugOutput": "none"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug (JLink)",
+      "servertype": "jlink",
+      "cwd": "${workspaceRoot}",
+      "executable": "${workspaceRoot}/target/{{target}}/debug/${workspaceFolderBasename}",
+      "device": "{{mcu}}",
+      "interface": "swd",
+      "svdFile": "${workspaceRoot}/.vscode/{{svd_name}}.svd",
+      "preLaunchTask": "cargo build",
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "attach",
+      "name": "Attach (OpenOCD)",
+      "servertype": "openocd",
+      "cwd": "${workspaceRoot}",
+      "executable": "${workspaceRoot}/target/{{target}}/debug/${workspaceFolderBasename}",
+      "device": "{{mcu}}",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/{{openocd_target}}.cfg"
+      ],
+      "svdFile": "${workspaceRoot}/.vscode/{{svd_name}}.svd",
+      "showDevDebugOutput": "none"
+    }
+  ]
+}
