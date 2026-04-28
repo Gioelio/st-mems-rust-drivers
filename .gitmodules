@@ -49,3 +49,9 @@
 [submodule "ism6hg256x"]
 	path = ism6hg256x
 	url = https://github.com/STMicroelectronics/ism6hg256x-rs
+[submodule "asm330lhh"]
+	path = asm330lhh
+	url = https://github.com/STMicroelectronics/asm330lhh-rs
+[submodule "asm330lhhx"]
+	path = asm330lhhx
+	url = https://github.com/STMicroelectronics/asm330lhhx-rs
